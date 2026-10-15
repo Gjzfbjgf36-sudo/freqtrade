@@ -643,22 +643,58 @@ footer code { font-family: var(--font-data); }
     });
   }
 
+  /**
+   * Bricht eine Anfrage nach der angegebenen Zeit ab. Ohne das bleibt ein
+   * Verbindungsversuch an eine Adresse, an der niemand antwortet, minutenlang
+   * offen — und der Knopf hängt auf „…", ohne dass etwas passiert.
+   */
+  function timeoutSignal(ms) {
+    if (typeof AbortController === "undefined") return undefined;
+    var c = new AbortController();
+    setTimeout(function () { c.abort(); }, ms);
+    return c.signal;
+  }
+
   function login(base, user, pass) {
     return fetch(base + "/api/v1/token/login", {
       method: "POST",
-      headers: { Authorization: "Basic " + btoa(user + ":" + pass) }
+      headers: { Authorization: "Basic " + btoa(user + ":" + pass) },
+      signal: timeoutSignal(15000)
     }).then(function (r) {
       if (r.status === 401) throw new Error("Benutzername oder Passwort stimmt nicht.");
       if (!r.ok) throw new Error("Anmeldung fehlgeschlagen (HTTP " + r.status + ").");
-      return r.json();
+      return r.json().catch(function () {
+        // Kommt statt der Anmeldung eine Webseite zurück, sitzt eine
+        // Zugangsschranke davor — etwa die Portweiterleitung von Codespaces.
+        throw new Error(
+          "Die Antwort war keine Anmeldung, sondern eine Webseite. " +
+          "Davor sitzt vermutlich eine Zugangsschranke der Portweiterleitung."
+        );
+      });
     });
+  }
+
+  /**
+   * Ein Endpunkt, dessen Ausfall die Seite nicht leeren soll. Je nach Zustand
+   * des Bots antworten einzelne davon mit 503 — etwa solange noch kein Trade
+   * existiert. Dann fehlt eine Karte, nicht die ganze Anzeige.
+   */
+  function opt(path, fallback) {
+    return api(path).catch(function () { return fallback; });
   }
 
   function loadAll() {
     return Promise.all([
-      api("/show_config"), api("/status"), api("/profit"), api("/balance"),
-      api("/daily?timescale=14"), api("/performance"), api("/whitelist"),
-      api("/count"), api("/logs?limit=40"), api("/trades?limit=15")
+      api("/show_config"),                      // ohne diesen geht nichts
+      opt("/status", []),
+      opt("/profit", {}),
+      opt("/balance", {}),
+      opt("/daily?timescale=14", { data: [] }),
+      opt("/performance", []),
+      opt("/whitelist", { whitelist: [] }),
+      opt("/count", {}),
+      opt("/logs?limit=40", { logs: [] }),
+      opt("/trades?limit=15", { trades: [] })
     ]).then(function (r) {
       var cfg = r[0], daily = r[4].data || [];
       var eq = Number((r[3] && r[3].starting_capital) || 0), rows = [];
@@ -1150,7 +1186,18 @@ footer code { font-family: var(--font-data); }
     var base = $("api").value.trim().replace(/\/+$/, "");
     var user = $("user").value.trim();
     var pass = $("pass").value;
-    if (!base) return;
+
+    // Leeres Adressfeld ist kein Grund, nichts zu tun: wird die Seite vom Bot
+    // selbst ausgeliefert, ist seine Adresse die der Seite.
+    if (!base) {
+      base = /^https?:$/.test(location.protocol) ? location.origin : "http://127.0.0.1:8080";
+      $("api").value = base;
+    }
+    if (!pass) {
+      fail("Es fehlt das Passwort. Es steht in <code>user_data/config.local.json</code>.");
+      render(demo());
+      return;
+    }
     S.base = base;
     $("connbtn").disabled = true;
     $("connbtn").textContent = "…";
@@ -1168,8 +1215,13 @@ footer code { font-family: var(--font-data); }
       // Das Live-Token wird bewusst nicht gespeichert — es ist ein Zugangsschlüssel.
       connectWs(base, $("wstoken").value.trim());
     }).catch(function (e) {
-      var hint = /Failed to fetch|NetworkError|Load failed/i.test(e.message)
-        ? "Der Server ist unter dieser Adresse nicht erreichbar, oder die Seitenherkunft fehlt in <code>CORS_origins</code> der Bot-Konfiguration."
+      var hint = /abort/i.test(e.name || e.message)
+        ? "Unter <code>" + esc(base) + "</code> hat nach 15 Sekunden niemand geantwortet. " +
+          "Zeigt die Adresse wirklich auf den Bot?"
+        : /Failed to fetch|NetworkError|Load failed/i.test(e.message)
+        ? "Unter <code>" + esc(base) + "</code> antwortet kein Bot. Läuft er noch, " +
+          "und stimmt die Adresse? Wird die Seite nicht vom Bot selbst ausgeliefert, " +
+          "muss ihre Herkunft zusätzlich in <code>CORS_origins</code> stehen."
         : e.message;
       fail(hint);
       render(demo());
@@ -1196,12 +1248,12 @@ footer code { font-family: var(--font-data); }
     var st = localStorage.getItem("ft.theme"); if (st) document.documentElement.setAttribute("data-theme", st);
   } catch (e) {}
 
-  // Liefert der Bot diese Seite selbst aus, ist seine Adresse die der Seite.
-  // Das gilt auch hinter einem Tunnel oder einem Reverse-Proxy.
+  // Kommt die Seite über das Netz, ist ihre eigene Adresse die des Bots: so wird
+  // sie ausgeliefert, auch hinter einer Portweiterleitung oder einem Tunnel.
+  // Bewusst ohne Testanfrage — schlüge die fehl, bliebe `127.0.0.1` stehen, und
+  // das zeigt auf das Gerät des Betrachters statt auf den Bot.
   if (!storedBase && /^https?:$/.test(location.protocol)) {
-    fetch(location.origin + "/api/v1/ping").then(function (r) {
-      if (r.ok) $("api").value = location.origin;
-    }).catch(function () { /* nicht vom Bot ausgeliefert — Standard behalten */ });
+    $("api").value = location.origin;
   }
 
   window.addEventListener("resize", function () {
