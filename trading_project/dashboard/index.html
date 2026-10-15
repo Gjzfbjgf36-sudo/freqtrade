@@ -501,7 +501,8 @@ footer code { font-family: var(--font-data); }
 
   var S = {
     base: "http://127.0.0.1:8080",
-    token: null,
+    token: null,    // Zugangstoken, 15 Minuten gültig
+    refresh: null,  // Erneuerungs-Token, 30 Tage gültig
     live: false,
     timer: null,
     cur: "USDT",
@@ -634,10 +635,46 @@ footer code { font-family: var(--font-data); }
   }
 
   /* ---------- API ---------- */
-  function api(path) {
-    var opts = { headers: {} };
+
+  /**
+   * Holt ein frisches Zugangstoken. Freqtrade gibt bei der Anmeldung zwei
+   * Token aus: das Zugangstoken gilt 15 Minuten, das Erneuerungs-Token 30 Tage.
+   * Ohne diesen Schritt fällt die Seite nach einer Viertelstunde mit 401 heraus.
+   * Laufen mehrere Abfragen gleichzeitig in den Ablauf, teilen sie sich eine
+   * Erneuerung statt jede eine eigene auszulösen.
+   */
+  var refreshing = null;
+  function refreshToken() {
+    if (refreshing) return refreshing;
+    if (!S.refresh) return Promise.reject(new Error("Die Sitzung ist abgelaufen."));
+
+    refreshing = fetch(S.base + "/api/v1/token/refresh", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + S.refresh },
+      signal: timeoutSignal(15000)
+    }).then(function (r) {
+      if (!r.ok) throw new Error("Die Sitzung ist abgelaufen, bitte neu anmelden.");
+      return r.json();
+    }).then(function (d) {
+      S.token = d.access_token;
+      refreshing = null;
+      return d.access_token;
+    }, function (e) {
+      refreshing = null;
+      S.refresh = null;
+      throw e;
+    });
+
+    return refreshing;
+  }
+
+  function api(path, retried) {
+    var opts = { headers: {}, signal: timeoutSignal(15000) };
     if (S.token) opts.headers.Authorization = "Bearer " + S.token;
     return fetch(S.base + "/api/v1" + path, opts).then(function (r) {
+      if (r.status === 401 && !retried && S.refresh) {
+        return refreshToken().then(function () { return api(path, true); });
+      }
       if (!r.ok) throw new Error(path + " → HTTP " + r.status);
       return r.json();
     });
@@ -1203,6 +1240,7 @@ footer code { font-family: var(--font-data); }
     $("connbtn").textContent = "…";
     login(base, user, pass).then(function (r) {
       S.token = r.access_token;
+      S.refresh = r.refresh_token;
       S.live = true;
       // Beispielereignisse verwerfen, ab jetzt kommen echte.
       S.events = [];
