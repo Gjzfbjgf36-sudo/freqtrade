@@ -14,6 +14,19 @@ Browser ──HTTPS──> Cloudflare ──Tunnel──> cloudflared ──127.
                    Cloudflare Access (Anmeldung)
 ```
 
+## Worauf das läuft
+
+`setup-vps.sh` ist nicht an einen Miet-Server gebunden — es richtet jedes
+Debian oder Ubuntu ein, auch einen Rechner bei dir zu Hause oder einen
+Raspberry Pi. Für den Heimbetrieb ist der Tunnel sogar der angenehmere Weg:
+keine Portfreigabe im Router, keine feste IP nötig.
+
+Zur Architektur: TA-Lib bringt fertige Pakete für x86_64 und 64-Bit-ARM mit,
+die Installation dauert dort Minuten. Auf einem 32-Bit-Raspberry-Pi-OS gibt es
+kein fertiges Paket, dann wird übersetzt — das dauert lange und schlägt auf
+kleinen Geräten gern fehl. Auf dem Pi also die 64-Bit-Fassung des Systems
+verwenden.
+
 ## Vorbereitung
 
 Dashboard vom Bot ausliefern lassen, damit eine Adresse genügt:
