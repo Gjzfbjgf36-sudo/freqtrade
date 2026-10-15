@@ -284,3 +284,61 @@ Die Werte verlassen den Browser nicht: Sie stehen weder in der ausgelieferten
 Seite noch auf dem Server, und sie erreichen weder andere Geräte noch andere
 Betrachter. Haken entfernen und einmal verbinden löscht sie wieder. Stimmen
 gemerkte Daten nicht mehr, verwirft die Seite sie von selbst.
+
+## Telegram statt Weboberfläche
+
+Der bequemste Weg auf einem Telefon oder Tablet: Freqtrade meldet sich über
+Telegram und lässt sich dort auch steuern. Kein Browser, keine Adresse, keine
+Anmeldung, keine Portweiterleitung — und jeder Kauf und Verkauf kommt als Push.
+
+**1. Bot anlegen.** In Telegram [@BotFather](https://t.me/BotFather) anschreiben,
+`/newbot` senden, Namen vergeben. Am Ende kommt ein Token der Form
+`123456789:AAE...`.
+
+**2. Chat-ID holen.** Deinen neuen Bot anschreiben (irgendetwas, etwa `hallo`),
+dann [@userinfobot](https://t.me/userinfobot) fragen — der nennt dir deine
+numerische ID.
+
+**3. Eintragen** in `user_data/config.local.json`, neben dem bestehenden
+`api_server`-Block:
+
+```json
+{
+    "api_server": { "…wie gehabt…" },
+    "telegram": {
+        "enabled": true,
+        "token": "123456789:AAE...",
+        "chat_id": "987654321"
+    }
+}
+```
+
+**4. Bot neu starten.** Er meldet sich sofort mit einer Startnachricht.
+
+### Was du dann im Chat tun kannst
+
+| Befehl | Antwort |
+| --- | --- |
+| `/status` | offene Positionen mit aktuellem Stand |
+| `/profit` | Gesamtergebnis seit Start |
+| `/balance` | Guthaben |
+| `/daily` | Ergebnis der letzten Tage |
+| `/performance` | Ergebnis je Paar |
+| `/count` | belegte von erlaubten Positionen |
+| `/stats` | Trefferquote und Haltedauern |
+| `/forceexit <id>` | Position sofort schließen |
+| `/stop` und `/start` | Handel anhalten und fortsetzen |
+| `/help` | alles Weitere |
+
+Welche Ereignisse er von sich aus meldet, steht in `bot-config.json` unter
+`notification_settings`. Voreingestellt sind die ausgeführten Käufe und
+Verkäufe, Abbrüche, Sperren und Warnungen — die reine Orderaufgabe ist aus,
+sonst kommt jede Bewegung doppelt.
+
+**Wichtig:** Wer deinen Telegram-Bot anschreiben kann, kann ihn steuern. Das
+Token gehört nirgendwo hin außer in `config.local.json`. Freqtrade antwortet
+nur der hinterlegten `chat_id` — trag deine eigene ein, keine fremde Gruppe.
+
+Telegram ersetzt die Hosting-Frage nicht: Der Bot muss weiterhin irgendwo
+laufen. Es ersetzt nur die Oberfläche — und auf dem iPad ist das der
+Unterschied zwischen funktioniert und funktioniert nicht.
