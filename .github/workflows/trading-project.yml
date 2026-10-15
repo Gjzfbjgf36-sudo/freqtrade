@@ -1,0 +1,88 @@
+name: Trading-Projekt
+
+# Prüft die Merkmale der RealizedVolStrategy bei jeder Änderung am Projekt.
+# Der zentrale Test rechnet jedes Merkmal einmal auf dem vollständigen und
+# einmal auf einem abgeschnittenen Kursverlauf — weicht ein Wert ab, greift das
+# Merkmal auf die Zukunft zu. Es wird keine Börsenverbindung gebraucht.
+
+on:
+  push:
+    branches:
+      - "claude/**"
+    paths:
+      - "trading_project/**"
+      - ".github/workflows/trading-project.yml"
+  pull_request:
+    paths:
+      - "trading_project/**"
+      - ".github/workflows/trading-project.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  features:
+    name: "Merkmale prüfen"
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python 🐍
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          activate-environment: true
+          enable-cache: true # zizmor: ignore[cache-poisoning] - nur Tests, kein Release
+          prune-cache: true
+          python-version: "3.13"
+          cache-dependency-glob: "requirements**.txt"
+          cache-suffix: "trading-project"
+
+      - name: Abhängigkeiten
+        run: |
+          uv pip install -e .
+          uv pip install pytest pytest-xdist
+
+      - name: Tests
+        run: pytest trading_project/tests -q -p no:cacheprovider
+
+      - name: Strategie lädt
+        run: |
+          freqtrade list-strategies \
+            --strategy-path trading_project/strategies \
+            --userdir user_data \
+          | tee /dev/stderr | grep -q "RealizedVolStrategy"
+
+      - name: Dashboard ist vollständig
+        run: |
+          python - <<'PY'
+          import pathlib
+          import sys
+
+          page = pathlib.Path("trading_project/dashboard/index.html").read_text()
+
+          fehlend = [
+              marke
+              for marke in ("<title>", "</html>", "api/v1/token/login", "--bg:")
+              if marke not in page
+          ]
+          if fehlend:
+              sys.exit(f"Im Dashboard fehlt: {fehlend}")
+
+          # Das Dashboard liest nur. Schreibende Endpunkte gehören nicht hinein.
+          verboten = [
+              pfad
+              for pfad in ("/forceexit", "/forceenter", "/api/v1/stop", "/api/v1/start")
+              if pfad in page
+          ]
+          if verboten:
+              sys.exit(f"Schreibender Endpunkt im Dashboard: {verboten}")
+
+          print("Dashboard in Ordnung")
+          PY

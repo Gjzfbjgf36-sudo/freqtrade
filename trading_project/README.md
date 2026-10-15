@@ -227,3 +227,32 @@ mit bereits vorhandenen Kursdaten. Ohne Freigabe laufen deshalb nur der
 `webserver`-Modus und die Tests unter `trading_project/tests`; `freqtrade trade`
 und `freqtrade backtesting` brechen mit `Could not load markets` ab. Lokal oder
 mit freigegebener Domain funktionieren beide unverändert.
+
+## Über GitHub arbeiten (ohne eigenen Rechner)
+
+Vom iPad aus genügt der Browser.
+
+**Codespace** — `.devcontainer/trading-dashboard/` richtet beim Anlegen alles
+ein: Freqtrade installieren, Strategie ablegen, Zugangsdaten erzeugen, Dashboard
+in die Oberfläche des Bots kopieren. Bei jedem Start fährt der Webserver hoch.
+
+Auf github.com: **Code → Codespaces → ⋯ → New with options** und als
+Konfiguration *Trading-Projekt (Bot + Dashboard)* wählen. Nach ein paar Minuten
+im Reiter **PORTS** die Adresse zu Port 8080 öffnen — das ist das Dashboard,
+über HTTPS und von jedem Gerät erreichbar, solange der Codespace läuft.
+
+Die Sichtbarkeit des Ports steht standardmäßig auf *privat*: die Adresse
+funktioniert nur, wenn du bei GitHub angemeldet bist. Das ist die richtige
+Einstellung — auf *öffentlich* erreicht jeder mit der Adresse die Schnittstelle
+deines Bots.
+
+Grenzen: Ein Codespace hält sich nach 30 Minuten ohne Benutzung selbst an, und
+das Gratis-Kontingent liegt bei 60 Kernstunden im Monat. Zum Entwickeln,
+Backtesten und Ausprobieren reicht das; für einen Bot, der durchläuft, nicht.
+
+**Actions** — `.github/workflows/trading-project.yml` prüft bei jeder Änderung
+am Projekt die Merkmale, dass die Strategie lädt und dass im Dashboard kein
+schreibender Endpunkt steht. Das ist der Zweck, für den Actions gedacht ist.
+Einen Bot dauerhaft darin laufen zu lassen, geht nicht: ein Lauf endet nach
+sechs Stunden, es gibt keine eingehenden Verbindungen, und GitHubs
+Nutzungsbedingungen erlauben nur Arbeit am Projekt selbst.
