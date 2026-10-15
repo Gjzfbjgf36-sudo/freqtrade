@@ -256,3 +256,19 @@ schreibender Endpunkt steht. Das ist der Zweck, für den Actions gedacht ist.
 Einen Bot dauerhaft darin laufen zu lassen, geht nicht: ein Lauf endet nach
 sechs Stunden, es gibt keine eingehenden Verbindungen, und GitHubs
 Nutzungsbedingungen erlauben nur Arbeit am Projekt selbst.
+
+## Live mitverfolgen
+
+Das Dashboard fragt die Zahlen alle fünf Sekunden ab. Zusätzlich kann es am
+Ereignisstrom des Bots mithören: dann erscheinen Käufe, Verkäufe, Sperren,
+Warnungen und Meldungen der Strategie in dem Moment, in dem sie passieren —
+FreqAI meldet darüber auch sein Modelltraining.
+
+Dafür das Feld **Live-Token** oben ausfüllen. Der Wert steht als `ws_token` in
+`user_data/config.local.json`. Er wird bewusst nicht im Browser gespeichert.
+
+Der Ereignisstrom gibt es nur im Handelsbetrieb (`freqtrade trade`). Im
+`webserver`-Modus läuft kein Bot, der Ereignisse erzeugt — die Verbindung
+scheitert dort mit `502`, und das Dashboard schreibt entsprechend
+„Kein Ereignisstrom – läuft der Bot im Handelsbetrieb?". Die Zahlen aktualisiert
+es dann trotzdem weiter per Abfrage.

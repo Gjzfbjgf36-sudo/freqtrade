@@ -125,8 +125,9 @@ input[type="text"], input[type="password"] {
 }
 input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 #api { width: 190px; }
-#user { width: 110px; }
-#pass { width: 120px; }
+#user { width: 100px; }
+#pass { width: 110px; }
+#wstoken { width: 110px; }
 button {
   font-family: var(--font-body); font-size: 13px; font-weight: 600;
   padding: 7px 14px;
@@ -234,6 +235,35 @@ dl.spec dd { margin: 0; font-family: var(--font-data); text-align: right; font-v
   background: var(--surface-2); border: 1px solid var(--line);
 }
 
+/* ---- Ereignisstrom ---- */
+.feed { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+.feed li {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.feed li:last-child { border-bottom: none; }
+.feed .t { font-family: var(--font-data); font-size: 11.5px; color: var(--muted); }
+.feed .kind {
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 1px 7px; border-radius: 3px;
+  border: 1px solid var(--line); background: var(--surface-2);
+  white-space: nowrap;
+}
+.feed .kind.in { color: var(--gain); border-color: color-mix(in oklab, var(--gain) 40%, var(--line)); }
+.feed .kind.out { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 40%, var(--line)); }
+.feed .kind.warn { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 40%, var(--line)); }
+.feed .kind.bad { color: var(--loss); border-color: color-mix(in oklab, var(--loss) 40%, var(--line)); }
+.feed .txt { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.feed .txt b { font-family: var(--font-data); font-weight: 600; }
+.feed .txt .num { font-variant-numeric: tabular-nums; }
+
+.pill.is-stream { color: var(--gain); border-color: color-mix(in oklab, var(--gain) 40%, var(--line)); }
+
 .log {
   font-family: var(--font-data); font-size: 12px;
   margin: 0; padding: 12px 14px;
@@ -281,6 +311,10 @@ footer code { font-family: var(--font-data); }
       <div class="field">
         <label for="pass">Passwort</label>
         <input type="password" id="pass" autocomplete="current-password">
+      </div>
+      <div class="field">
+        <label for="wstoken" title="ws_token aus user_data/config.local.json — ohne ihn wird alle 5 Sekunden abgefragt">Live-Token</label>
+        <input type="password" id="wstoken" spellcheck="false" autocomplete="off">
       </div>
       <button type="submit" id="connbtn">Verbinden</button>
       <button type="button" class="ghost" id="themebtn" title="Hell/Dunkel umschalten">Theme</button>
@@ -374,6 +408,27 @@ footer code { font-family: var(--font-data); }
       </div>
     </article>
 
+    <article class="card">
+      <header>
+        <h2>Abgeschlossene Trades</h2>
+        <span class="meta" id="closed-meta">neueste zuerst</span>
+      </header>
+      <div class="body flush">
+        <div class="tablewrap">
+          <table id="closedtable">
+            <thead>
+              <tr>
+                <th>Paar</th><th>Geschlossen</th><th>Grund</th>
+                <th>Einsatz</th><th>Ergebnis</th><th>%</th><th>Dauer</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="empty" id="closed-empty" hidden>Noch nichts abgeschlossen.</p>
+      </div>
+    </article>
+
     <section class="cols-2">
       <article class="card">
         <header>
@@ -404,15 +459,28 @@ footer code { font-family: var(--font-data); }
       </article>
     </section>
 
-    <article class="card">
-      <header>
-        <h2>Protokoll</h2>
-        <span class="meta" id="log-meta">neueste zuerst</span>
-      </header>
-      <div class="body flush">
-        <pre class="log" id="logbox"></pre>
-      </div>
-    </article>
+    <section class="cols">
+      <article class="card">
+        <header>
+          <h2>Aktivität</h2>
+          <span class="meta" id="live-meta">Abfrage alle 5 s</span>
+        </header>
+        <div class="body flush">
+          <ul class="feed" id="feed"></ul>
+          <p class="empty" id="feed-empty" hidden>Noch keine Ereignisse.</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <header>
+          <h2>Protokoll</h2>
+          <span class="meta" id="log-meta">neueste zuerst</span>
+        </header>
+        <div class="body flush">
+          <pre class="log" id="logbox"></pre>
+        </div>
+      </article>
+    </section>
 
   </div>
 </main>
@@ -420,9 +488,10 @@ footer code { font-family: var(--font-data); }
 <footer>
   <div class="wrap">
     Liest ausschließlich die REST-Schnittstelle von Freqtrade
-    (<code>/api/v1/status</code>, <code>/api/v1/profit</code>, <code>/api/v1/daily</code>,
-    <code>/api/v1/performance</code>, <code>/api/v1/balance</code>, <code>/api/v1/logs</code>).
-    Es werden keine Orders ausgelöst. Zugangsdaten bleiben im Browser.
+    (<code>/status</code>, <code>/profit</code>, <code>/daily</code>, <code>/performance</code>,
+    <code>/balance</code>, <code>/trades</code>, <code>/logs</code>) und hört mit Live-Token
+    am Ereignisstrom <code>/message/ws</code> mit. Es werden keine Orders ausgelöst.
+    Zugangsdaten bleiben im Browser.
   </div>
 </footer>
 
@@ -436,8 +505,24 @@ footer code { font-family: var(--font-data); }
     live: false,
     timer: null,
     cur: "USDT",
-    fiat: "EUR"
+    fiat: "EUR",
+    ws: null,          // offene Ereignisverbindung
+    wsRetry: 0,        // Wartezeit vor dem nächsten Versuch wächst mit jedem Fehlschlag
+    wsClosing: false,  // unterscheidet gewolltes Trennen von Verbindungsabbruch
+    events: []         // jüngste Ereignisse, neueste zuerst
   };
+
+  var MAX_EVENTS = 60;
+
+  // Alles außer analyzed_df: die Kerzendaten wären ein Vielfaches an Datenmenge
+  // und für die Anzeige ohne Nutzen.
+  var WS_TOPICS = [
+    "status", "startup", "warning", "exception", "strategy_msg",
+    "entry", "entry_fill", "entry_cancel",
+    "exit", "exit_fill", "exit_cancel",
+    "protection_trigger", "protection_trigger_global",
+    "liquidation_warning", "whitelist"
+  ];
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -462,6 +547,22 @@ footer code { font-family: var(--font-data); }
   function shortDate(iso) {
     var p = String(iso).slice(0, 10).split("-");
     return p.length === 3 ? p[2] + "." + p[1] + "." : String(iso);
+  }
+  function clock(d) {
+    d = d || new Date();
+    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2) +
+      ":" + ("0" + d.getSeconds()).slice(-2);
+  }
+  function dayTime(iso) {
+    if (!iso) return "—";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return shortDate(d.toISOString()) + " " + ("0" + d.getHours()).slice(-2) +
+      ":" + ("0" + d.getMinutes()).slice(-2);
+  }
+  function esc(s) {
+    return String(s === null || s === undefined ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   /* ---------- Beispieldaten ---------- */
@@ -509,6 +610,19 @@ footer code { font-family: var(--font-data); }
         { pair: "DOT/USDT", count: 3, profit_abs: -9.6, profit_pct: -2.30 }
       ],
       whitelist: ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "ADA/USDT", "LINK/USDT", "DOT/USDT", "AVAX/USDT", "LTC/USDT", "ATOM/USDT"],
+      closed: [
+        { pair: "ETH/USDT", close_date: "2026-10-14T18:42:00Z", exit_reason: "roi", stake_amount: 50, profit_abs: 2.41, profit_ratio: 0.0482, trade_duration: 185 },
+        { pair: "ADA/USDT", close_date: "2026-10-14T11:05:00Z", exit_reason: "stop_loss", stake_amount: 50, profit_abs: -2.6, profit_ratio: -0.052, trade_duration: 420 },
+        { pair: "BTC/USDT", close_date: "2026-10-13T22:18:00Z", exit_reason: "exit_signal", stake_amount: 50, profit_abs: 1.08, profit_ratio: 0.0216, trade_duration: 95 },
+        { pair: "SOL/USDT", close_date: "2026-10-13T09:30:00Z", exit_reason: "roi", stake_amount: 50, profit_abs: 3.17, profit_ratio: 0.0634, trade_duration: 260 }
+      ],
+      events: [
+        ["12:04:51", "status", { status: "Bot läuft, 3 Positionen offen" }],
+        ["12:04:46", "entry_fill", { pair: "LINK/USDT", open_rate: 17.92, stake_amount: 50, stake_currency: "USDT" }],
+        ["12:03:12", "strategy_msg", { msg: "FreqAI: Training für LINK/USDT abgeschlossen, 2184 Zeilen" }],
+        ["11:51:08", "exit_fill", { pair: "ETH/USDT", profit_amount: 2.41, profit_ratio: 0.0482, stake_currency: "USDT", exit_reason: "roi" }],
+        ["11:12:30", "entry_fill", { pair: "SOL/USDT", open_rate: 182.44, stake_amount: 50, stake_currency: "USDT" }]
+      ],
       logs: [
         ["11:58:40", "INFO", "freqtrade.exchange", "Marktdaten für 10 Paare aktualisiert (5m)"],
         ["12:00:03", "INFO", "freqtrade.freqtradebot", "SOL/USDT – Position gehalten, Stop bei 174.12"],
@@ -544,7 +658,7 @@ footer code { font-family: var(--font-data); }
     return Promise.all([
       api("/show_config"), api("/status"), api("/profit"), api("/balance"),
       api("/daily?timescale=14"), api("/performance"), api("/whitelist"),
-      api("/count"), api("/logs?limit=40")
+      api("/count"), api("/logs?limit=40"), api("/trades?limit=15")
     ]).then(function (r) {
       var cfg = r[0], daily = r[4].data || [];
       var eq = Number((r[3] && r[3].starting_capital) || 0), rows = [];
@@ -577,7 +691,10 @@ footer code { font-family: var(--font-data); }
         }),
         performance: r[5] || [],
         whitelist: (r[6] && r[6].whitelist) || [],
-        logs: (r[8] && r[8].logs) || []
+        logs: (r[8] && r[8].logs) || [],
+        closed: ((r[9] && r[9].trades) || []).filter(function (t) {
+          return !t.is_open;
+        }).reverse()
       };
     });
   }
@@ -777,6 +894,27 @@ footer code { font-family: var(--font-data); }
     $("open-empty").hidden = (d.open || []).length > 0;
     $("open-meta").textContent = (d.open || []).length + " aktiv";
 
+    // Abgeschlossene Trades
+    var ct = $("closedtable").querySelector("tbody");
+    ct.innerHTML = "";
+    var closed = d.closed || [];
+    closed.forEach(function (t) {
+      var v = Number(t.profit_abs);
+      var minutes = t.trade_duration != null ? t.trade_duration : null;
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td class="pair">' + esc(t.pair) + "</td>" +
+        '<td class="num">' + dayTime(t.close_date) + "</td>" +
+        "<td>" + esc(t.exit_reason || "—") + "</td>" +
+        '<td class="num">' + nf(t.stake_amount, 2) + "</td>" +
+        '<td class="num ' + cls(v) + '">' + signed(v, 2) + "</td>" +
+        '<td class="num ' + cls(t.profit_ratio) + '">' + signed(100 * t.profit_ratio, 2) + " %</td>" +
+        '<td class="num">' + (minutes != null ? dur(minutes * 60) : "—") + "</td>";
+      ct.appendChild(tr);
+    });
+    $("closed-empty").hidden = closed.length > 0;
+    $("closed-meta").textContent = closed.length ? closed.length + " zuletzt" : "neueste zuerst";
+
     // Ergebnis je Paar
     var pt = $("perftable").querySelector("tbody");
     pt.innerHTML = "";
@@ -826,12 +964,171 @@ footer code { font-family: var(--font-data); }
       return String(l);
     });
     $("logbox").innerHTML = lines.join("\n") || "Keine Einträge.";
+
+    // Beispielereignisse nur einmal, damit die Karte nicht leer wirkt.
+    if (d.demo && d.events && !S.events.length) {
+      d.events.slice().reverse().forEach(function (e) {
+        pushEvent(e[1], e[2], e[0]);
+      });
+    }
+    renderFeed();
+  }
+
+  /* ---------- Ereignisstrom ---------- */
+
+  /**
+   * Übersetzt eine Nachricht der Ereignisschnittstelle in eine Zeile.
+   * Die Felder sind in freqtrade/rpc/rpc_types.py festgelegt; fehlt eines,
+   * wird die Zeile trotzdem lesbar.
+   */
+  function describe(type, d) {
+    d = d || {};
+    var pair = d.pair ? "<b>" + esc(d.pair) + "</b>" : "";
+    var reason = d.exit_reason || d.reason;
+
+    switch (type) {
+      case "entry":
+        return { kind: "Order", cls: "in", text: pair + " – Einstiegsorder zu " +
+          '<span class="num">' + nf(d.order_rate || d.open_rate, 4) + "</span>" };
+      case "entry_fill":
+        return { kind: "Einstieg", cls: "in", text: pair + " – gekauft zu " +
+          '<span class="num">' + nf(d.open_rate, 4) + "</span>, Einsatz " +
+          '<span class="num">' + nf(d.stake_amount, 2) + "</span> " + esc(d.stake_currency || "") };
+      case "entry_cancel":
+        return { kind: "Abbruch", cls: "warn", text: pair + " – Einstieg abgebrochen" +
+          (reason ? ": " + esc(reason) : "") };
+      case "exit":
+        return { kind: "Order", cls: "out", text: pair + " – Ausstiegsorder" +
+          (reason ? " (" + esc(reason) + ")" : "") };
+      case "exit_fill":
+        var p = Number(d.profit_amount);
+        var pct = Number(d.profit_ratio) * 100;
+        return {
+          kind: "Ausstieg",
+          cls: isNaN(p) ? "out" : (p >= 0 ? "in" : "bad"),
+          text: pair + " – verkauft, " +
+            '<span class="num ' + cls(p) + '">' + signed(p, 2) + " " + esc(d.stake_currency || "") +
+            " (" + signed(pct, 2) + " %)</span>" + (reason ? " – " + esc(reason) : "")
+        };
+      case "exit_cancel":
+        return { kind: "Abbruch", cls: "warn", text: pair + " – Ausstieg abgebrochen" +
+          (reason ? ": " + esc(reason) : "") };
+      case "protection_trigger":
+      case "protection_trigger_global":
+        return { kind: "Sperre", cls: "warn", text: (pair || "Alle Paare") + " – Handel gesperrt" +
+          (reason ? ": " + esc(reason) : "") };
+      case "liquidation_warning":
+        return { kind: "Warnung", cls: "bad", text: pair + " – Liquidationswarnung" };
+      case "whitelist":
+        return { kind: "Paare", cls: "", text: "Handelspaare aktualisiert: " +
+          (Array.isArray(d) ? d.length : (d.data ? d.data.length : "?")) + " Paare" };
+      case "warning":
+        return { kind: "Warnung", cls: "warn", text: esc(d.status || d.msg || "") };
+      case "exception":
+        return { kind: "Fehler", cls: "bad", text: esc(d.status || d.msg || "") };
+      case "startup":
+        return { kind: "Start", cls: "", text: esc(d.status || "Bot gestartet") };
+      case "status":
+        return { kind: "Status", cls: "", text: esc(d.status || "") };
+      case "strategy_msg":
+        // Hierüber meldet sich auch FreqAI, etwa beim Trainieren eines Modells.
+        var m = String(d.msg || "");
+        var training = /train|model|freqai/i.test(m);
+        return { kind: training ? "Training" : "Strategie", cls: "", text: esc(m) };
+      default:
+        return { kind: esc(type), cls: "", text: esc(JSON.stringify(d).slice(0, 180)) };
+    }
+  }
+
+  function pushEvent(type, data, when) {
+    var line = describe(type, data);
+    S.events.unshift({ t: when || clock(), kind: line.kind, cls: line.cls, text: line.text });
+    if (S.events.length > MAX_EVENTS) S.events.length = MAX_EVENTS;
+    renderFeed();
+  }
+
+  function renderFeed() {
+    var ul = $("feed");
+    ul.innerHTML = S.events.map(function (e) {
+      return '<li><span class="t">' + e.t + '</span>' +
+        '<span class="kind ' + e.cls + '">' + e.kind + "</span>" +
+        '<span class="txt">' + e.text + "</span></li>";
+    }).join("");
+    $("feed-empty").hidden = S.events.length > 0;
+  }
+
+  function wsUrl(base, token) {
+    var u = base.replace(/^http/, "ws");
+    return u + "/api/v1/message/ws?token=" + encodeURIComponent(token);
+  }
+
+  function setStreamState(on, note) {
+    $("live-meta").textContent = on ? "Ereignisstrom verbunden" : (note || "Abfrage alle 5 s");
+    var pill = $("statepill");
+    if (on) pill.classList.add("is-stream");
+    else pill.classList.remove("is-stream");
+  }
+
+  function closeWs() {
+    S.wsClosing = true;
+    if (S.ws) { try { S.ws.close(); } catch (e) {} }
+    S.ws = null;
+    setStreamState(false);
+  }
+
+  function connectWs(base, token) {
+    if (!token) { setStreamState(false, "Abfrage alle 5 s – kein Live-Token"); return; }
+    closeWs();
+    S.wsClosing = false;
+
+    var sock;
+    try {
+      sock = new WebSocket(wsUrl(base, token));
+    } catch (e) {
+      setStreamState(false, "Ereignisstrom nicht erreichbar");
+      return;
+    }
+    S.ws = sock;
+
+    sock.onopen = function () {
+      S.wsRetry = 0;
+      S.wsEverOpen = true;
+      setStreamState(true);
+      sock.send(JSON.stringify({ type: "subscribe", data: WS_TOPICS }));
+      pushEvent("status", { status: "Ereignisstrom verbunden" });
+    };
+
+    sock.onmessage = function (ev) {
+      var msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (!msg || !msg.type) return;
+      pushEvent(msg.type, msg.data);
+      // Ein ausgeführter Kauf oder Verkauf ändert Bestand und Ergebnis —
+      // die Zahlen sofort nachladen statt bis zur nächsten Abfrage zu warten.
+      if (msg.type === "entry_fill" || msg.type === "exit_fill") tick();
+    };
+
+    sock.onclose = function () {
+      if (S.wsClosing || !S.live) { setStreamState(false); return; }
+      S.wsRetry = Math.min(30, (S.wsRetry || 1) * 2);
+      // Kam die Verbindung nie zustande, liegt es fast immer daran, dass der
+      // Bot im Webserver-Modus läuft: dort gibt es keine Ereignisse.
+      setStreamState(false, S.wsEverOpen
+        ? "Ereignisstrom getrennt, neuer Versuch in " + S.wsRetry + " s"
+        : "Kein Ereignisstrom – läuft der Bot im Handelsbetrieb?");
+      setTimeout(function () {
+        if (S.live && !S.wsClosing) connectWs(S.base, token);
+      }, S.wsRetry * 1000);
+    };
+
+    sock.onerror = function () { /* onclose übernimmt */ };
   }
 
   /* ---------- Verbindung ---------- */
   function fail(msg) {
     S.live = false;
     if (S.timer) { clearInterval(S.timer); S.timer = null; }
+    closeWs();
     var b = $("banner");
     b.hidden = false;
     b.innerHTML = "<b>Nicht verbunden.</b> " + msg +
@@ -860,12 +1157,16 @@ footer code { font-family: var(--font-data); }
     login(base, user, pass).then(function (r) {
       S.token = r.access_token;
       S.live = true;
+      // Beispielereignisse verwerfen, ab jetzt kommen echte.
+      S.events = [];
       try { localStorage.setItem("ft.base", base); localStorage.setItem("ft.user", user); } catch (e) {}
       return loadAll();
     }).then(function (d) {
       render(d);
       if (S.timer) clearInterval(S.timer);
       S.timer = setInterval(tick, 5000);
+      // Das Live-Token wird bewusst nicht gespeichert — es ist ein Zugangsschlüssel.
+      connectWs(base, $("wstoken").value.trim());
     }).catch(function (e) {
       var hint = /Failed to fetch|NetworkError|Load failed/i.test(e.message)
         ? "Der Server ist unter dieser Adresse nicht erreichbar, oder die Seitenherkunft fehlt in <code>CORS_origins</code> der Bot-Konfiguration."
