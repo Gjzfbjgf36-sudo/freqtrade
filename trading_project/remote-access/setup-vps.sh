@@ -63,8 +63,9 @@ sudo -u "$BOT_USER" "$DIR/.venv/bin/pip" install --quiet -e "$DIR"
 
 say "Strategie und Benutzerverzeichnis"
 sudo -u "$BOT_USER" mkdir -p "$DIR/user_data/strategies" "$DIR/user_data/logs" "$DIR/user_data/data"
-sudo -u "$BOT_USER" cp -n "$DIR/freqtrade/templates/sample_strategy.py" \
-  "$DIR/user_data/strategies/SampleStrategy.py"
+[ -f "$DIR/user_data/strategies/SampleStrategy.py" ] || \
+  sudo -u "$BOT_USER" cp "$DIR/freqtrade/templates/sample_strategy.py" \
+    "$DIR/user_data/strategies/SampleStrategy.py"
 
 say "Zugangsdaten"
 LOCAL_CFG="$DIR/user_data/config.local.json"

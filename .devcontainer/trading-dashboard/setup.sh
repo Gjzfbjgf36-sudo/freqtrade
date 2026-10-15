@@ -12,7 +12,8 @@ pip install --quiet pytest pytest-xdist
 
 echo "== Benutzerverzeichnis und Strategie"
 mkdir -p user_data/strategies user_data/logs user_data/data
-cp -n freqtrade/templates/sample_strategy.py user_data/strategies/SampleStrategy.py
+[ -f user_data/strategies/SampleStrategy.py ] || \
+  cp freqtrade/templates/sample_strategy.py user_data/strategies/SampleStrategy.py
 
 echo "== Zugangsdaten"
 if [ ! -f user_data/config.local.json ]; then
