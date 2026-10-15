@@ -6,7 +6,10 @@ die den Bot über dessen REST-Schnittstelle ausliest.
 ```
 trading_project/
 ├── bot-config.json        Bot-Konfiguration (Dry-Run, keine Zugangsdaten)
-└── dashboard/index.html   Weboberfläche, eine Datei ohne Build-Schritt
+├── freqai-config.json     Ergänzung für den FreqAI-Betrieb
+├── dashboard/index.html   Weboberfläche, eine Datei ohne Build-Schritt
+├── strategies/            RealizedVolStrategy (FreqAI, Realized Volatility)
+└── tests/                 Prüfungen der Merkmale, ohne Börsenverbindung
 ```
 
 Die Strategie liegt unter `user_data/strategies/SampleStrategy.py` (Kopie der
@@ -89,6 +92,61 @@ sie in `api_server.CORS_origins` steht. Für den Aufruf oben sind
 `http://127.0.0.1:8081` und `http://localhost:8081` bereits eingetragen. Wird das
 Dashboard anderswo gehostet, muss diese Adresse dort ergänzt werden.
 
+## 5. RealizedVolStrategy (FreqAI)
+
+`trading_project/strategies/RealizedVolStrategy.py` übersetzt die Messgrößen der
+Realized-Volatility-Literatur in FreqAI-Merkmale: Realized Variance, Realized
+Semivariance (gute gegen schlechte Schwankung), Bipower Variation und die daraus
+abgeleitete Sprungkomponente, Realized Skew und Kurtosis, Volatilität der
+Volatilität sowie die HAR-Struktur über Stunde, Tag und Woche. Alles wird aus
+den eigenen OHLCV-Kerzen gerechnet, ein externer Datensatz ist nicht nötig.
+
+Die Zielgröße ist die vorwärtsgerichtete Rendite geteilt durch die zum
+Vorhersagezeitpunkt bekannte Volatilität. Das Modell sagt Bewegung in Einheiten
+der Standardabweichung voraus; die Ein- und Ausstiegsschwellen
+(`entry_sigma`, `exit_sigma`) sind entsprechend in Sigma angegeben.
+
+Zusätzliche Abhängigkeiten:
+
+```bash
+.venv/bin/pip install -r requirements-freqai.txt
+```
+
+Backtest:
+
+```bash
+.venv/bin/freqtrade backtesting \
+  -c trading_project/bot-config.json \
+  -c user_data/config.local.json \
+  -c trading_project/freqai-config.json \
+  --strategy RealizedVolStrategy \
+  --strategy-path trading_project/strategies \
+  --freqaimodel LightGBMRegressor \
+  --timerange 20260801-20260901
+```
+
+Vorher die Daten laden: `freqtrade download-data --timeframes 5m 1h 4h --days 120`.
+
+### Prüfungen
+
+```bash
+.venv/bin/pip install pytest
+.venv/bin/python -m pytest trading_project/tests -q
+```
+
+Elf Tests, keine Börsenverbindung nötig. Der wichtigste ist
+`test_features_do_not_look_ahead`: er rechnet jedes Merkmal einmal auf dem
+vollständigen und einmal auf einem abgeschnittenen Kursverlauf und vergleicht
+die gemeinsamen Zeitpunkte. Weicht ein Wert ab, benutzt das Merkmal Daten aus
+der Zukunft. Die übrigen prüfen die Messgrößen gegen ihre Definition
+(RS⁺ + RS⁻ = RV, BV ≤ RV bei Sprüngen, Anteile in [0, 1]) und schließen NaN,
+unendliche und konstante Merkmale nach der Aufwärmphase aus.
+
+Diese Tests sagen nichts über die Ertragskraft aus. Dafür gehören vor jedem
+Einsatz zusätzlich `freqtrade lookahead-analysis` und
+`freqtrade recursive-analysis` über die Strategie — beide brauchen echte
+Marktdaten.
+
 ## Konfiguration im Überblick
 
 | Einstellung | Wert |
@@ -106,6 +164,10 @@ Dashboard anderswo gehostet, muss diese Adresse dort ergänzt werden.
 
 In der Claude-Cloud-Umgebung, in der dieses Setup gebaut wurde, verweigert die
 Netzwerk-Policy jede Verbindung zu Börsen-Hosts (`api.binance.com` und andere
-antworten mit `403` auf den CONNECT des Proxys). Deshalb läuft dort der
-`webserver`-Modus, der eigentliche Handelsstart aber nicht. Lokal oder mit
-freigegebener Domain funktioniert `freqtrade trade` unverändert.
+antworten mit `403` auf den CONNECT des Proxys).
+
+Freqtrade lädt vor jedem Lauf die Marktliste der Börse — auch beim Backtest, auch
+mit bereits vorhandenen Kursdaten. Ohne Freigabe laufen deshalb nur der
+`webserver`-Modus und die Tests unter `trading_project/tests`; `freqtrade trade`
+und `freqtrade backtesting` brechen mit `Could not load markets` ab. Lokal oder
+mit freigegebener Domain funktionieren beide unverändert.
