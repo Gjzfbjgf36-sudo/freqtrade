@@ -1,0 +1,24 @@
+# Vorlage für ~/.cloudflared/config.yml
+#
+# Zwei Stellen anpassen: die Tunnel-ID aus `cloudflared tunnel create freqtrade`
+# und den Hostnamen, den du mit `cloudflared tunnel route dns` angelegt hast.
+
+tunnel: 00000000-0000-0000-0000-000000000000
+credentials-file: /home/USER/.cloudflared/00000000-0000-0000-0000-000000000000.json
+
+# Verbindungen von Cloudflare zum lokalen Bot.
+originRequest:
+  # Freqtrade hört unverschlüsselt auf dem Loopback — der Weg nach außen ist
+  # durch den Tunnel verschlüsselt.
+  noTLSVerify: false
+  connectTimeout: 10s
+  # Das Dashboard fragt alle fünf Sekunden ab; die Verbindung soll offen bleiben.
+  keepAliveTimeout: 90s
+
+ingress:
+  - hostname: bot.deine-domain.de
+    service: http://127.0.0.1:8080
+
+  # Alles, was auf keine Regel passt, wird abgewiesen. Diese Zeile muss am Ende
+  # stehen und ist Pflicht.
+  - service: http_status:404

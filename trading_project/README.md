@@ -9,6 +9,7 @@ trading_project/
 ├── freqai-config.json     Ergänzung für den FreqAI-Betrieb
 ├── dashboard/index.html   Weboberfläche, eine Datei ohne Build-Schritt
 ├── install-dashboard.sh   liefert die Oberfläche über den Bot selbst aus
+├── remote-access/         Cloudflare Tunnel: Einrichtung und Beispielkonfiguration
 ├── strategies/            RealizedVolStrategy (FreqAI, Realized Volatility)
 └── tests/                 Prüfungen der Merkmale, ohne Börsenverbindung
 ```
@@ -115,14 +116,16 @@ kein Port zeigt ins Internet. Von jedem eigenen Gerät erreichbar unter
 `http://<rechnername>:8080`. In der Konfiguration dafür
 `"listen_ip_address": "0.0.0.0"` setzen.
 
-**Cloudflare Tunnel.** Ergibt eine öffentliche HTTPS-Adresse ohne Portfreigabe:
+**Cloudflare Tunnel.** Ergibt eine öffentliche HTTPS-Adresse ohne Portfreigabe.
+Der Tunnel läuft auf demselben Rechner und erreicht den Bot über `127.0.0.1`,
+der Bot bleibt also nach außen unsichtbar. Schnelltest:
 
 ```bash
 cloudflared tunnel --url http://127.0.0.1:8080
 ```
 
-Davor gehört eine zweite Hürde, etwa Cloudflare Access, sonst steht die
-Schnittstelle offen im Netz.
+Dauerhafte Adresse, Cloudflare Access als Anmeldung davor und Autostart:
+[`remote-access/README.md`](remote-access/README.md).
 
 **Eigener Server mit Reverse-Proxy.** Nginx oder Caddy mit TLS-Zertifikat vor
 dem Bot. Nur sinnvoll, wenn ohnehin ein Server läuft.
@@ -137,8 +140,9 @@ steuert den Bot.
 * Langes, einmaliges Passwort in `user_data/config.local.json`, nicht das aus
   irgendeiner Beispielkonfiguration.
 * `jwt_secret_key` zufällig erzeugen und nicht weitergeben.
-* `listen_ip_address` nur dann auf `0.0.0.0` stellen, wenn ein Tunnel oder ein
-  privates Netz davor liegt.
+* `listen_ip_address` auf `127.0.0.1` lassen, wenn der Tunnel auf demselben
+  Rechner läuft — er erreicht den Bot über das Loopback. Auf `0.0.0.0` nur bei
+  Zugriff aus einem privaten Netz wie Tailscale.
 
 Das Dashboard selbst ruft ausschließlich lesende Endpunkte auf. Die schreibenden
 sind davon unberührt erreichbar — die Absicherung hängt am Bot, nicht an der
