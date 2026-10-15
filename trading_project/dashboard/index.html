@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Freqtrade Leitstand</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: eine Spalte aus gestapelten Bändern — Kopfleiste mit Verbindung, Kennzahlenreihe,
+   zwei Diagramme nebeneinander, darunter Tabellen. Unter 760px stapelt alles einspaltig. */
+:root {
+  --bg: #f2f5f7;
+  --surface: #ffffff;
+  --surface-2: #e8eef2;
+  --fg: #101a21;
+  --muted: #56707e;
+  --line: #cfdbe3;
+  --accent: #156c9b;
+  --gain: #0b7a57;
+  --loss: #b23a32;
+  --warn: #8a6310;
+  --grid: #dde6ec;
+
+  --font-display: "IBM Plex Sans Condensed", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1317;
+    --surface: #141d23;
+    --surface-2: #1b262e;
+    --fg: #e4edf2;
+    --muted: #8aa3b0;
+    --line: #27353e;
+    --accent: #4da6d6;
+    --gain: #2fbf8a;
+    --loss: #e26a5f;
+    --warn: #d1a14a;
+    --grid: #1f2c34;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1317;
+  --surface: #141d23;
+  --surface-2: #1b262e;
+  --fg: #e4edf2;
+  --muted: #8aa3b0;
+  --line: #27353e;
+  --accent: #4da6d6;
+  --gain: #2fbf8a;
+  --loss: #e26a5f;
+  --warn: #d1a14a;
+  --grid: #1f2c34;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: 0.01em; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* ---- Kopfleiste ---- */
+.topbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 20;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.topbar .wrap { padding-block: 12px; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand h1 { font-size: 19px; font-weight: 700; }
+.brand .sub { font-size: 12px; color: var(--muted); font-family: var(--font-data); letter-spacing: 0.04em; text-transform: uppercase; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.03em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.pill.is-live { color: var(--gain); border-color: color-mix(in oklab, var(--gain) 40%, var(--line)); }
+.pill.is-live .dot { background: var(--gain); }
+.pill.is-demo { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 40%, var(--line)); }
+.pill.is-demo .dot { background: var(--warn); }
+.pill.is-off { color: var(--muted); }
+
+.conn { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.conn label { font-size: 11px; color: var(--muted); display: block; letter-spacing: 0.05em; text-transform: uppercase; }
+.field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+input[type="text"], input[type="password"] {
+  font-family: var(--font-data); font-size: 13px;
+  padding: 6px 8px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-width: 0;
+}
+input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#api { width: 190px; }
+#user { width: 110px; }
+#pass { width: 120px; }
+button {
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  padding: 7px 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+button.ghost { background: transparent; color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.notice {
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: var(--r);
+  border: 1px solid color-mix(in oklab, var(--warn) 35%, var(--line));
+  background: color-mix(in oklab, var(--warn) 9%, var(--surface));
+  color: var(--fg);
+}
+.notice b { color: var(--warn); }
+.notice code { font-family: var(--font-data); font-size: 12px; }
+
+main .wrap { padding-block: 20px 40px; display: flex; flex-direction: column; gap: 18px; }
+
+/* ---- Kennzahlen ---- */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
+}
+.kpi .k { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.kpi .v { font-family: var(--font-data); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.kpi .n { font-size: 12px; color: var(--muted); font-family: var(--font-data); }
+.up { color: var(--gain); }
+.down { color: var(--loss); }
+
+/* ---- Karten ---- */
+.cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; align-items: start; }
+.cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  min-width: 0;
+  overflow: hidden;
+}
+.card > header {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.card h2 { font-size: 14px; font-weight: 700; letter-spacing: 0.02em; }
+.card header .meta { font-size: 11px; color: var(--muted); font-family: var(--font-data); text-transform: uppercase; letter-spacing: 0.05em; }
+.card .body { padding: 12px 14px; }
+.card .body.flush { padding: 0; }
+
+/* ---- Diagramme ---- */
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; }
+.tip {
+  position: absolute; pointer-events: none;
+  background: var(--fg); color: var(--bg);
+  font-family: var(--font-data); font-size: 11.5px;
+  padding: 5px 8px; border-radius: 4px;
+  white-space: nowrap; transform: translate(-50%, -100%);
+  opacity: 0; transition: opacity 0.1s;
+}
+.tip.on { opacity: 1; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); padding: 0 14px 12px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+
+/* ---- Tabellen ---- */
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th, td { text-align: right; padding: 8px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th {
+  font-size: 10.5px; color: var(--muted); font-weight: 600;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  background: var(--surface-2);
+  position: sticky; top: 0;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.pair { font-family: var(--font-data); font-weight: 600; }
+.bar-cell { width: 90px; }
+.minibar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.minibar span { display: block; height: 100%; border-radius: 3px; }
+
+.empty { padding: 26px 14px; text-align: center; color: var(--muted); font-size: 13.5px; }
+
+/* ---- Konfiguration / Liste ---- */
+dl.spec { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13.5px; }
+dl.spec dt { color: var(--muted); }
+dl.spec dd { margin: 0; font-family: var(--font-data); text-align: right; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-family: var(--font-data); font-size: 11.5px;
+  padding: 2px 7px; border-radius: 3px;
+  background: var(--surface-2); border: 1px solid var(--line);
+}
+
+.log {
+  font-family: var(--font-data); font-size: 12px;
+  margin: 0; padding: 12px 14px;
+  max-height: 220px; overflow: auto;
+  white-space: pre-wrap; word-break: break-word;
+  color: var(--muted);
+}
+.log b { color: var(--fg); font-weight: 500; }
+
+footer .wrap { padding-block: 0 28px; font-size: 12px; color: var(--muted); }
+footer code { font-family: var(--font-data); }
+
+@media (max-width: 860px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .cols, .cols-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .conn { margin-left: 0; width: 100%; }
+  #api { width: 100%; }
+  .field.grow { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <h1>Freqtrade Leitstand</h1>
+      <span class="sub" id="botname">dry-run</span>
+    </div>
+    <span class="pill is-demo" id="statepill"><span class="dot"></span><span id="statetext">Beispieldaten</span></span>
+    <form class="conn" id="connform">
+      <div class="field grow">
+        <label for="api">API-Adresse</label>
+        <input type="text" id="api" value="http://127.0.0.1:8080" spellcheck="false" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="user">Benutzer</label>
+        <input type="text" id="user" value="freqtrader" spellcheck="false" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="pass">Passwort</label>
+        <input type="password" id="pass" autocomplete="current-password">
+      </div>
+      <button type="submit" id="connbtn">Verbinden</button>
+      <button type="button" class="ghost" id="themebtn" title="Hell/Dunkel umschalten">Theme</button>
+    </form>
+  </div>
+</div>
+
+<main>
+  <div class="wrap">
+
+    <p class="notice" id="banner">
+      <b>Beispieldaten.</b> Die Seite ist noch mit keinem Bot verbunden und zeigt erfundene Zahlen,
+      damit jedes Element sichtbar ist. Trage oben die Adresse deines laufenden Freqtrade-API-Servers ein
+      (Standard <code>http://127.0.0.1:8080</code>) und verbinde dich, um echte Werte zu sehen.
+    </p>
+
+    <section class="kpis" aria-label="Kennzahlen">
+      <div class="kpi">
+        <span class="k">Gesamtergebnis</span>
+        <span class="v" id="kpi-profit">—</span>
+        <span class="n" id="kpi-profit-sub">—</span>
+      </div>
+      <div class="kpi">
+        <span class="k">Guthaben</span>
+        <span class="v" id="kpi-balance">—</span>
+        <span class="n" id="kpi-balance-sub">—</span>
+      </div>
+      <div class="kpi">
+        <span class="k">Offene Positionen</span>
+        <span class="v" id="kpi-open">—</span>
+        <span class="n" id="kpi-open-sub">—</span>
+      </div>
+      <div class="kpi">
+        <span class="k">Trefferquote</span>
+        <span class="v" id="kpi-win">—</span>
+        <span class="n" id="kpi-win-sub">—</span>
+      </div>
+    </section>
+
+    <section class="cols">
+      <article class="card">
+        <header>
+          <h2>Tagesergebnis</h2>
+          <span class="meta" id="daily-meta">letzte 14 Tage</span>
+        </header>
+        <div class="body flush">
+          <div class="chart" id="dailychart">
+            <svg viewBox="0 0 620 220" role="img" aria-label="Balkendiagramm des täglichen Ergebnisses"></svg>
+            <div class="tip" id="daily-tip"></div>
+          </div>
+          <div class="legend">
+            <span><i style="background:var(--gain)"></i>Gewinntag</span>
+            <span><i style="background:var(--loss)"></i>Verlusttag</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <header>
+          <h2>Kapitalkurve</h2>
+          <span class="meta">kumuliert, USDT</span>
+        </header>
+        <div class="body flush">
+          <div class="chart" id="equitychart">
+            <svg viewBox="0 0 420 220" role="img" aria-label="Liniendiagramm der kumulierten Kapitalentwicklung"></svg>
+            <div class="tip" id="equity-tip"></div>
+          </div>
+          <div class="legend"><span><i style="background:var(--accent)"></i>Kontostand nach abgeschlossenen Trades</span></div>
+        </div>
+      </article>
+    </section>
+
+    <article class="card">
+      <header>
+        <h2>Offene Positionen</h2>
+        <span class="meta" id="open-meta">—</span>
+      </header>
+      <div class="body flush">
+        <div class="tablewrap">
+          <table id="opentable">
+            <thead>
+              <tr>
+                <th>Paar</th><th>Einstieg</th><th>Aktuell</th><th>Einsatz</th>
+                <th>Ergebnis</th><th>%</th><th>Laufzeit</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="empty" id="open-empty" hidden>Keine offenen Positionen.</p>
+      </div>
+    </article>
+
+    <section class="cols-2">
+      <article class="card">
+        <header>
+          <h2>Ergebnis je Paar</h2>
+          <span class="meta">abgeschlossen</span>
+        </header>
+        <div class="body flush">
+          <div class="tablewrap">
+            <table id="perftable">
+              <thead><tr><th>Paar</th><th>Trades</th><th>Ergebnis</th><th>%</th><th class="bar-cell"></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="empty" id="perf-empty" hidden>Noch keine abgeschlossenen Trades.</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <header>
+          <h2>Konfiguration</h2>
+          <span class="meta" id="cfg-meta">—</span>
+        </header>
+        <div class="body">
+          <dl class="spec" id="cfgspec"></dl>
+          <p style="margin:14px 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Handelspaare</p>
+          <div class="chips" id="whitelist"></div>
+        </div>
+      </article>
+    </section>
+
+    <article class="card">
+      <header>
+        <h2>Protokoll</h2>
+        <span class="meta" id="log-meta">neueste zuerst</span>
+      </header>
+      <div class="body flush">
+        <pre class="log" id="logbox"></pre>
+      </div>
+    </article>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    Liest ausschließlich die REST-Schnittstelle von Freqtrade
+    (<code>/api/v1/status</code>, <code>/api/v1/profit</code>, <code>/api/v1/daily</code>,
+    <code>/api/v1/performance</code>, <code>/api/v1/balance</code>, <code>/api/v1/logs</code>).
+    Es werden keine Orders ausgelöst. Zugangsdaten bleiben im Browser.
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var S = {
+    base: "http://127.0.0.1:8080",
+    token: null,
+    live: false,
+    timer: null,
+    cur: "USDT",
+    fiat: "EUR"
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- Formatierung ---------- */
+  function nf(v, d) {
+    if (v === null || v === undefined || isNaN(v)) return "—";
+    return Number(v).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function signed(v, d, unit) {
+    if (v === null || v === undefined || isNaN(v)) return "—";
+    var s = v > 0 ? "+" : (v < 0 ? "−" : "");
+    return s + nf(Math.abs(v), d) + (unit ? " " + unit : "");
+  }
+  function cls(v) { return v > 0 ? "up" : (v < 0 ? "down" : ""); }
+  function dur(sec) {
+    if (!sec && sec !== 0) return "—";
+    var d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+    if (d > 0) return d + " T " + h + " h";
+    if (h > 0) return h + " h " + m + " m";
+    return m + " m";
+  }
+  function shortDate(iso) {
+    var p = String(iso).slice(0, 10).split("-");
+    return p.length === 3 ? p[2] + "." + p[1] + "." : String(iso);
+  }
+
+  /* ---------- Beispieldaten ---------- */
+  function demo() {
+    var days = [], equity = 1000, start = new Date("2026-10-01T00:00:00Z");
+    var moves = [12.4, -5.1, 0, 23.8, 9.2, -14.6, 4.3, 31.0, -8.7, 0, 17.5, -3.2, 26.4, 11.9];
+    for (var i = 0; i < moves.length; i++) {
+      var dt = new Date(start.getTime() + i * 86400000);
+      equity += moves[i];
+      days.push({
+        date: dt.toISOString().slice(0, 10),
+        abs_profit: moves[i],
+        trade_count: moves[i] === 0 ? 0 : (1 + (i % 3)),
+        equity: equity
+      });
+    }
+    return {
+      demo: true,
+      state: "running",
+      bot_name: "freqtrade-dryrun",
+      config: {
+        dry_run: true, stake_currency: "USDT", stake_amount: "50", max_open_trades: 5,
+        timeframe: "5m", strategy: "SampleStrategy", exchange: "binance",
+        trading_mode: "spot", fiat_display_currency: "EUR", version: "2026.10-dev"
+      },
+      profit: {
+        profit_closed_coin: 104.9, profit_closed_percent_mean: 1.37, profit_all_coin: 112.3,
+        winning_trades: 17, losing_trades: 9, trade_count: 26, closed_trade_count: 26,
+        best_pair: "SOL/USDT", best_rate: 4.82, profit_factor: 1.84
+      },
+      balance: { total: 1112.3, starting_capital: 1000, currencies: [] },
+      count: { current: 3, max: 5, total_stake: 150 },
+      daily: days,
+      open: [
+        { pair: "BTC/USDT", open_rate: 104820.5, current_rate: 105910.0, stake_amount: 50, profit_abs: 0.52, profit_ratio: 0.0104, open_duration_s: 9240 },
+        { pair: "SOL/USDT", open_rate: 182.44, current_rate: 179.10, stake_amount: 50, profit_abs: -0.92, profit_ratio: -0.0183, open_duration_s: 25800 },
+        { pair: "LINK/USDT", open_rate: 17.92, current_rate: 18.41, stake_amount: 50, profit_abs: 1.37, profit_ratio: 0.0273, open_duration_s: 3600 }
+      ],
+      performance: [
+        { pair: "SOL/USDT", count: 6, profit_abs: 41.2, profit_pct: 4.82 },
+        { pair: "ETH/USDT", count: 5, profit_abs: 28.7, profit_pct: 2.91 },
+        { pair: "BTC/USDT", count: 4, profit_abs: 19.4, profit_pct: 1.66 },
+        { pair: "LINK/USDT", count: 5, profit_abs: 12.1, profit_pct: 1.04 },
+        { pair: "ADA/USDT", count: 3, profit_abs: -4.8, profit_pct: -1.12 },
+        { pair: "DOT/USDT", count: 3, profit_abs: -9.6, profit_pct: -2.30 }
+      ],
+      whitelist: ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "ADA/USDT", "LINK/USDT", "DOT/USDT", "AVAX/USDT", "LTC/USDT", "ATOM/USDT"],
+      logs: [
+        ["11:58:40", "INFO", "freqtrade.exchange", "Marktdaten für 10 Paare aktualisiert (5m)"],
+        ["12:00:03", "INFO", "freqtrade.freqtradebot", "SOL/USDT – Position gehalten, Stop bei 174.12"],
+        ["12:03:12", "INFO", "freqtrade.strategy", "SampleStrategy – 10 Paare analysiert, 1 Einstiegssignal"],
+        ["12:04:46", "INFO", "freqtrade.freqtradebot", "LINK/USDT – Einstieg ausgeführt zu 17.92 (dry-run)"],
+        ["12:04:51", "INFO", "freqtrade.worker", "Bot heartbeat. PID=1842, version=2026.10-dev, state=RUNNING"]
+      ]
+    };
+  }
+
+  /* ---------- API ---------- */
+  function api(path) {
+    var opts = { headers: {} };
+    if (S.token) opts.headers.Authorization = "Bearer " + S.token;
+    return fetch(S.base + "/api/v1" + path, opts).then(function (r) {
+      if (!r.ok) throw new Error(path + " → HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  function login(base, user, pass) {
+    return fetch(base + "/api/v1/token/login", {
+      method: "POST",
+      headers: { Authorization: "Basic " + btoa(user + ":" + pass) }
+    }).then(function (r) {
+      if (r.status === 401) throw new Error("Benutzername oder Passwort stimmt nicht.");
+      if (!r.ok) throw new Error("Anmeldung fehlgeschlagen (HTTP " + r.status + ").");
+      return r.json();
+    });
+  }
+
+  function loadAll() {
+    return Promise.all([
+      api("/show_config"), api("/status"), api("/profit"), api("/balance"),
+      api("/daily?timescale=14"), api("/performance"), api("/whitelist"),
+      api("/count"), api("/logs?limit=40")
+    ]).then(function (r) {
+      var cfg = r[0], daily = r[4].data || [];
+      var eq = Number((r[3] && r[3].starting_capital) || 0), rows = [];
+      for (var i = 0; i < daily.length; i++) {
+        var d = daily[i];
+        eq += Number(d.abs_profit || 0);
+        rows.push({ date: d.date, abs_profit: Number(d.abs_profit || 0), trade_count: d.trade_count || 0, equity: eq });
+      }
+      return {
+        demo: false,
+        state: cfg.state || "unbekannt",
+        bot_name: cfg.bot_name || "freqtrade",
+        config: {
+          dry_run: cfg.dry_run, stake_currency: cfg.stake_currency, stake_amount: cfg.stake_amount,
+          max_open_trades: cfg.max_open_trades, timeframe: cfg.timeframe, strategy: cfg.strategy,
+          exchange: cfg.exchange, trading_mode: cfg.trading_mode,
+          fiat_display_currency: cfg.fiat_display_currency, version: cfg.version
+        },
+        profit: r[2],
+        balance: r[3],
+        count: r[7],
+        daily: rows,
+        open: (r[1] || []).map(function (t) {
+          return {
+            pair: t.pair, open_rate: t.open_rate, current_rate: t.current_rate,
+            stake_amount: t.stake_amount, profit_abs: t.profit_abs,
+            profit_ratio: t.profit_ratio, open_duration_s: t.open_timestamp
+              ? (Date.now() - t.open_timestamp) / 1000 : null
+          };
+        }),
+        performance: r[5] || [],
+        whitelist: (r[6] && r[6].whitelist) || [],
+        logs: (r[8] && r[8].logs) || []
+      };
+    });
+  }
+
+  /* ---------- Diagramm: Tagesergebnis ---------- */
+  function drawDaily(rows) {
+    var box = $("dailychart"), svg = box.querySelector("svg"), tip = $("daily-tip");
+    var W = 620, H = 220, padL = 46, padR = 10, padT = 14, padB = 30;
+    var iw = W - padL - padR, ih = H - padT - padB;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    if (!rows.length) return;
+
+    var vals = rows.map(function (r) { return r.abs_profit; });
+    var max = Math.max.apply(null, vals.concat([0]));
+    var min = Math.min.apply(null, vals.concat([0]));
+    var span = (max - min) || 1;
+    max += span * 0.12; min -= span * 0.12;
+    var y = function (v) { return padT + ih * (max - v) / (max - min); };
+    var zero = y(0);
+
+    var ns = "http://www.w3.org/2000/svg";
+    function el(n, a) { var e = document.createElementNS(ns, n); for (var k in a) e.setAttribute(k, a[k]); return e; }
+
+    // Gitter und Achsenbeschriftung
+    var ticks = [max, max / 2, 0, min / 2, min];
+    for (var i = 0; i < ticks.length; i++) {
+      var tv = ticks[i];
+      if (tv > max || tv < min) continue;
+      var ty = y(tv);
+      svg.appendChild(el("line", { x1: padL, x2: W - padR, y1: ty, y2: ty, stroke: "var(--grid)", "stroke-width": tv === 0 ? 1.5 : 1 }));
+      var lab = el("text", { x: padL - 8, y: ty + 3.5, "text-anchor": "end", fill: "var(--muted)", "font-size": 10, "font-family": "var(--font-data)" });
+      lab.textContent = (tv > 0 ? "+" : "") + Math.round(tv);
+      svg.appendChild(lab);
+    }
+
+    var slot = iw / rows.length;
+    var bw = Math.max(5, Math.min(26, slot - 4));
+    rows.forEach(function (r, i) {
+      var cx = padL + slot * i + slot / 2;
+      var v = r.abs_profit;
+      var top = v >= 0 ? y(v) : zero;
+      var h = Math.max(1.5, Math.abs(zero - y(v)));
+      var color = v >= 0 ? "var(--gain)" : "var(--loss)";
+      var bar = el("rect", {
+        x: cx - bw / 2, y: top, width: bw, height: h,
+        rx: Math.min(4, bw / 2), fill: v === 0 ? "var(--grid)" : color
+      });
+      svg.appendChild(bar);
+
+      var hit = el("rect", { x: padL + slot * i, y: padT, width: slot, height: ih, fill: "transparent" });
+      hit.style.cursor = "crosshair";
+      hit.addEventListener("pointerenter", function () {
+        tip.innerHTML = shortDate(r.date) + " &nbsp; " + (v > 0 ? "+" : v < 0 ? "−" : "") +
+          nf(Math.abs(v), 2) + " " + S.cur + " &nbsp;·&nbsp; " + r.trade_count + " Trades";
+        tip.classList.add("on");
+        var rect = box.getBoundingClientRect(), scale = rect.width / W;
+        tip.style.left = (cx * scale) + "px";
+        tip.style.top = ((v >= 0 ? top : zero) * scale - 8) + "px";
+      });
+      hit.addEventListener("pointerleave", function () { tip.classList.remove("on"); });
+      svg.appendChild(hit);
+
+      if (i % Math.ceil(rows.length / 7) === 0) {
+        var dl = el("text", { x: cx, y: H - 10, "text-anchor": "middle", fill: "var(--muted)", "font-size": 10, "font-family": "var(--font-data)" });
+        dl.textContent = shortDate(r.date).slice(0, 6);
+        svg.appendChild(dl);
+      }
+    });
+  }
+
+  /* ---------- Diagramm: Kapitalkurve ---------- */
+  function drawEquity(rows) {
+    var box = $("equitychart"), svg = box.querySelector("svg"), tip = $("equity-tip");
+    var W = 420, H = 220, padL = 52, padR = 12, padT = 14, padB = 30;
+    var iw = W - padL - padR, ih = H - padT - padB;
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    if (rows.length < 2) return;
+
+    var vals = rows.map(function (r) { return r.equity; });
+    var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals);
+    var pad = (max - min) * 0.18 || Math.max(1, max * 0.01);
+    max += pad; min -= pad;
+    var x = function (i) { return padL + iw * i / (rows.length - 1); };
+    var y = function (v) { return padT + ih * (max - v) / (max - min); };
+
+    var ns = "http://www.w3.org/2000/svg";
+    function el(n, a) { var e = document.createElementNS(ns, n); for (var k in a) e.setAttribute(k, a[k]); return e; }
+
+    for (var t = 0; t <= 3; t++) {
+      var tv = min + (max - min) * t / 3, ty = y(tv);
+      svg.appendChild(el("line", { x1: padL, x2: W - padR, y1: ty, y2: ty, stroke: "var(--grid)", "stroke-width": 1 }));
+      var lab = el("text", { x: padL - 8, y: ty + 3.5, "text-anchor": "end", fill: "var(--muted)", "font-size": 10, "font-family": "var(--font-data)" });
+      lab.textContent = Math.round(tv);
+      svg.appendChild(lab);
+    }
+
+    var dPath = "", aPath = "";
+    rows.forEach(function (r, i) {
+      dPath += (i ? " L" : "M") + x(i).toFixed(1) + " " + y(r.equity).toFixed(1);
+    });
+    aPath = dPath + " L" + x(rows.length - 1).toFixed(1) + " " + (padT + ih) + " L" + padL + " " + (padT + ih) + " Z";
+
+    var grad = el("linearGradient", { id: "eqfill", x1: 0, y1: 0, x2: 0, y2: 1 });
+    var s1 = el("stop", { offset: "0%", "stop-color": "var(--accent)", "stop-opacity": 0.22 });
+    var s2 = el("stop", { offset: "100%", "stop-color": "var(--accent)", "stop-opacity": 0.02 });
+    grad.appendChild(s1); grad.appendChild(s2);
+    var defs = el("defs", {}); defs.appendChild(grad); svg.appendChild(defs);
+
+    svg.appendChild(el("path", { d: aPath, fill: "url(#eqfill)", stroke: "none" }));
+    svg.appendChild(el("path", { d: dPath, fill: "none", stroke: "var(--accent)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+
+    var last = rows[rows.length - 1];
+    svg.appendChild(el("circle", { cx: x(rows.length - 1), cy: y(last.equity), r: 4.5, fill: "var(--accent)", stroke: "var(--surface)", "stroke-width": 2 }));
+    var endLab = el("text", { x: x(rows.length - 1) - 4, y: y(last.equity) - 11, "text-anchor": "end", fill: "var(--fg)", "font-size": 11, "font-weight": 600, "font-family": "var(--font-data)" });
+    endLab.textContent = nf(last.equity, 0);
+    svg.appendChild(endLab);
+
+    var marker = el("line", { x1: 0, x2: 0, y1: padT, y2: padT + ih, stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 });
+    svg.appendChild(marker);
+
+    var over = el("rect", { x: padL, y: padT, width: iw, height: ih, fill: "transparent" });
+    over.style.cursor = "crosshair";
+    over.addEventListener("pointermove", function (ev) {
+      var rect = box.getBoundingClientRect(), scale = rect.width / W;
+      var px = (ev.clientX - rect.left) / scale;
+      var i = Math.round((px - padL) / (iw / (rows.length - 1)));
+      i = Math.max(0, Math.min(rows.length - 1, i));
+      var r = rows[i];
+      marker.setAttribute("x1", x(i)); marker.setAttribute("x2", x(i)); marker.setAttribute("opacity", 1);
+      tip.innerHTML = shortDate(r.date) + " &nbsp; " + nf(r.equity, 2) + " " + S.cur;
+      tip.classList.add("on");
+      tip.style.left = (x(i) * scale) + "px";
+      tip.style.top = (y(r.equity) * scale - 10) + "px";
+    });
+    over.addEventListener("pointerleave", function () {
+      tip.classList.remove("on"); marker.setAttribute("opacity", 0);
+    });
+    svg.appendChild(over);
+  }
+
+  /* ---------- Rendern ---------- */
+  function render(d) {
+    window.__ftLast = d;
+    S.cur = (d.config && d.config.stake_currency) || "USDT";
+    S.fiat = (d.config && d.config.fiat_display_currency) || "";
+
+    $("botname").textContent = (d.config && d.config.dry_run === false) ? "live" : "dry-run";
+
+    var pill = $("statepill"), txt = $("statetext");
+    pill.className = "pill " + (d.demo ? "is-demo" : (String(d.state).toLowerCase() === "running" ? "is-live" : "is-off"));
+    txt.textContent = d.demo ? "Beispieldaten" : (d.bot_name + " · " + String(d.state).toUpperCase());
+    $("banner").hidden = !d.demo;
+
+    // Kennzahlen
+    var p = d.profit || {};
+    var pc = Number(p.profit_closed_coin || 0);
+    $("kpi-profit").textContent = signed(pc, 2);
+    $("kpi-profit").className = "v num " + cls(pc);
+    $("kpi-profit-sub").textContent = S.cur + " · offen " + signed(Number(p.profit_all_coin || 0) - pc, 2);
+
+    var bal = (d.balance && d.balance.total) || 0;
+    var startCap = (d.balance && d.balance.starting_capital) || 0;
+    $("kpi-balance").textContent = nf(bal, 2);
+    $("kpi-balance-sub").textContent = S.cur + (startCap ? " · Start " + nf(startCap, 0) : "");
+
+    var c = d.count || {};
+    $("kpi-open").textContent = (c.current != null ? c.current : d.open.length) + " / " + (c.max != null ? c.max : "—");
+    $("kpi-open-sub").textContent = "gebunden " + nf(c.total_stake || 0, 2) + " " + S.cur;
+
+    var w = Number(p.winning_trades || 0), l = Number(p.losing_trades || 0);
+    var tot = w + l;
+    $("kpi-win").textContent = tot ? nf(100 * w / tot, 1) + " %" : "—";
+    $("kpi-win-sub").textContent = tot ? w + " gewonnen · " + l + " verloren" : "noch keine Trades";
+
+    // Diagramme
+    drawDaily(d.daily || []);
+    drawEquity(d.daily || []);
+    $("daily-meta").textContent = "letzte " + (d.daily ? d.daily.length : 0) + " Tage";
+
+    // Offene Positionen
+    var tb = $("opentable").querySelector("tbody");
+    tb.innerHTML = "";
+    (d.open || []).forEach(function (t) {
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td class="pair">' + t.pair + "</td>" +
+        '<td class="num">' + nf(t.open_rate, t.open_rate > 100 ? 2 : 4) + "</td>" +
+        '<td class="num">' + nf(t.current_rate, t.current_rate > 100 ? 2 : 4) + "</td>" +
+        '<td class="num">' + nf(t.stake_amount, 2) + "</td>" +
+        '<td class="num ' + cls(t.profit_abs) + '">' + signed(t.profit_abs, 2) + "</td>" +
+        '<td class="num ' + cls(t.profit_ratio) + '">' + signed(100 * t.profit_ratio, 2) + " %</td>" +
+        '<td class="num">' + dur(t.open_duration_s) + "</td>";
+      tb.appendChild(tr);
+    });
+    $("open-empty").hidden = (d.open || []).length > 0;
+    $("open-meta").textContent = (d.open || []).length + " aktiv";
+
+    // Ergebnis je Paar
+    var pt = $("perftable").querySelector("tbody");
+    pt.innerHTML = "";
+    var perf = (d.performance || []).slice(0, 8);
+    var peak = perf.reduce(function (m, r) { return Math.max(m, Math.abs(Number(r.profit_abs || 0))); }, 0) || 1;
+    perf.forEach(function (r) {
+      var v = Number(r.profit_abs || 0);
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td class="pair">' + r.pair + "</td>" +
+        '<td class="num">' + r.count + "</td>" +
+        '<td class="num ' + cls(v) + '">' + signed(v, 2) + "</td>" +
+        '<td class="num ' + cls(r.profit_pct) + '">' + signed(r.profit_pct, 2) + " %</td>" +
+        '<td class="bar-cell"><div class="minibar"><span style="width:' +
+          (100 * Math.abs(v) / peak).toFixed(1) + '%;background:' + (v >= 0 ? "var(--gain)" : "var(--loss)") + '"></span></div></td>';
+      pt.appendChild(tr);
+    });
+    $("perf-empty").hidden = perf.length > 0;
+
+    // Konfiguration
+    var cfg = d.config || {};
+    var spec = [
+      ["Strategie", cfg.strategy || "—"],
+      ["Börse", cfg.exchange || "—"],
+      ["Modus", cfg.dry_run === false ? "Live" : "Dry-Run"],
+      ["Markt", cfg.trading_mode || "spot"],
+      ["Zeitrahmen", cfg.timeframe || "—"],
+      ["Einsatz je Trade", (cfg.stake_amount || "—") + " " + (cfg.stake_currency || "")],
+      ["Max. Positionen", cfg.max_open_trades != null ? cfg.max_open_trades : "—"],
+      ["Version", cfg.version || "—"]
+    ];
+    $("cfgspec").innerHTML = spec.map(function (r) {
+      return "<dt>" + r[0] + "</dt><dd>" + r[1] + "</dd>";
+    }).join("");
+    $("cfg-meta").textContent = cfg.dry_run === false ? "LIVE" : "DRY-RUN";
+
+    $("whitelist").innerHTML = (d.whitelist || []).map(function (p2) {
+      return '<span class="chip">' + p2 + "</span>";
+    }).join("");
+
+    // Protokoll
+    var lines = (d.logs || []).slice().reverse().slice(0, 40).map(function (l) {
+      if (Array.isArray(l)) {
+        var time = String(l[0]).slice(-8);
+        return "<b>" + time + "</b>  " + (l[1] || "") + "  " + (l[3] || l[2] || "");
+      }
+      return String(l);
+    });
+    $("logbox").innerHTML = lines.join("\n") || "Keine Einträge.";
+  }
+
+  /* ---------- Verbindung ---------- */
+  function fail(msg) {
+    S.live = false;
+    if (S.timer) { clearInterval(S.timer); S.timer = null; }
+    var b = $("banner");
+    b.hidden = false;
+    b.innerHTML = "<b>Nicht verbunden.</b> " + msg +
+      " Die angezeigten Zahlen sind Beispieldaten.";
+    var pill = $("statepill");
+    pill.className = "pill is-demo";
+    $("statetext").textContent = "Beispieldaten";
+  }
+
+  function tick() {
+    loadAll().then(render).catch(function (e) {
+      fail("Die Abfrage schlug fehl: " + e.message + ".");
+      render(demo());
+    });
+  }
+
+  $("connform").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var base = $("api").value.trim().replace(/\/+$/, "");
+    var user = $("user").value.trim();
+    var pass = $("pass").value;
+    if (!base) return;
+    S.base = base;
+    $("connbtn").disabled = true;
+    $("connbtn").textContent = "…";
+    login(base, user, pass).then(function (r) {
+      S.token = r.access_token;
+      S.live = true;
+      try { localStorage.setItem("ft.base", base); localStorage.setItem("ft.user", user); } catch (e) {}
+      return loadAll();
+    }).then(function (d) {
+      render(d);
+      if (S.timer) clearInterval(S.timer);
+      S.timer = setInterval(tick, 5000);
+    }).catch(function (e) {
+      var hint = /Failed to fetch|NetworkError|Load failed/i.test(e.message)
+        ? "Der Server ist unter dieser Adresse nicht erreichbar, oder die Seitenherkunft fehlt in <code>CORS_origins</code> der Bot-Konfiguration."
+        : e.message;
+      fail(hint);
+      render(demo());
+    }).then(function () {
+      $("connbtn").disabled = false;
+      $("connbtn").textContent = "Verbinden";
+    });
+  });
+
+  $("themebtn").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var dark = cur ? cur === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+    try { localStorage.setItem("ft.theme", dark ? "light" : "dark"); } catch (e) {}
+  });
+
+  // Gespeicherte Eingaben (kein Passwort)
+  try {
+    var sb = localStorage.getItem("ft.base"); if (sb) $("api").value = sb;
+    var su = localStorage.getItem("ft.user"); if (su) $("user").value = su;
+    var st = localStorage.getItem("ft.theme"); if (st) document.documentElement.setAttribute("data-theme", st);
+  } catch (e) {}
+
+  window.addEventListener("resize", function () {
+    if (window.__ftLast) { drawDaily(window.__ftLast.daily || []); drawEquity(window.__ftLast.daily || []); }
+  });
+
+  render(demo());
+})();
+</script>
+</body>
+</html>
