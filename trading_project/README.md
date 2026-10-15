@@ -272,3 +272,15 @@ Der Ereignisstrom gibt es nur im Handelsbetrieb (`freqtrade trade`). Im
 scheitert dort mit `502`, und das Dashboard schreibt entsprechend
 „Kein Ereignisstrom – läuft der Bot im Handelsbetrieb?". Die Zahlen aktualisiert
 es dann trotzdem weiter per Abfrage.
+
+### Angemeldet bleiben
+
+In der Kopfleiste ist **merken** voreingestellt. Nach der ersten erfolgreichen
+Anmeldung liegen Benutzer, Passwort und Live-Token im Speicher dieses einen
+Browsers; jedes weitere Laden der Seite verbindet sich von selbst. Auf einem
+Tablet ist das der Unterschied zwischen einmal einfügen und jedes Mal abtippen.
+
+Die Werte verlassen den Browser nicht: Sie stehen weder in der ausgelieferten
+Seite noch auf dem Server, und sie erreichen weder andere Geräte noch andere
+Betrachter. Haken entfernen und einmal verbinden löscht sie wieder. Stimmen
+gemerkte Daten nicht mehr, verwirft die Seite sie von selbst.
