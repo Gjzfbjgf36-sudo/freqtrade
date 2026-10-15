@@ -887,11 +887,21 @@ footer code { font-family: var(--font-data); }
   });
 
   // Gespeicherte Eingaben (kein Passwort)
+  var storedBase = null;
   try {
-    var sb = localStorage.getItem("ft.base"); if (sb) $("api").value = sb;
+    storedBase = localStorage.getItem("ft.base");
+    if (storedBase) $("api").value = storedBase;
     var su = localStorage.getItem("ft.user"); if (su) $("user").value = su;
     var st = localStorage.getItem("ft.theme"); if (st) document.documentElement.setAttribute("data-theme", st);
   } catch (e) {}
+
+  // Liefert der Bot diese Seite selbst aus, ist seine Adresse die der Seite.
+  // Das gilt auch hinter einem Tunnel oder einem Reverse-Proxy.
+  if (!storedBase && /^https?:$/.test(location.protocol)) {
+    fetch(location.origin + "/api/v1/ping").then(function (r) {
+      if (r.ok) $("api").value = location.origin;
+    }).catch(function () { /* nicht vom Bot ausgeliefert — Standard behalten */ });
+  }
 
   window.addEventListener("resize", function () {
     if (window.__ftLast) { drawDaily(window.__ftLast.daily || []); drawEquity(window.__ftLast.daily || []); }

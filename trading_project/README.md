@@ -8,6 +8,7 @@ trading_project/
 ├── bot-config.json        Bot-Konfiguration (Dry-Run, keine Zugangsdaten)
 ├── freqai-config.json     Ergänzung für den FreqAI-Betrieb
 ├── dashboard/index.html   Weboberfläche, eine Datei ohne Build-Schritt
+├── install-dashboard.sh   liefert die Oberfläche über den Bot selbst aus
 ├── strategies/            RealizedVolStrategy (FreqAI, Realized Volatility)
 └── tests/                 Prüfungen der Merkmale, ohne Börsenverbindung
 ```
@@ -71,7 +72,7 @@ Nur die Schnittstelle ohne Handel (für das Dashboard und für Backtests):
   --userdir user_data
 ```
 
-## 4. Dashboard öffnen
+## 4. Dashboard öffnen (lokal)
 
 ```bash
 npx http-server trading_project/dashboard -p 8081
@@ -92,7 +93,58 @@ sie in `api_server.CORS_origins` steht. Für den Aufruf oben sind
 `http://127.0.0.1:8081` und `http://localhost:8081` bereits eingetragen. Wird das
 Dashboard anderswo gehostet, muss diese Adresse dort ergänzt werden.
 
-## 5. RealizedVolStrategy (FreqAI)
+## 5. Von überall erreichbar
+
+Das Dashboard kann vom Bot selbst ausgeliefert werden:
+
+```bash
+./trading_project/install-dashboard.sh
+```
+
+Das Skript kopiert die Seite nach `freqtrade/rpc/api_server/ui/installed/`.
+Danach zeigt die Adresse des API-Servers direkt das Dashboard, und die Seite
+erkennt ihre eigene Herkunft als Bot-Adresse — gleiche Herkunft heißt: kein
+CORS-Eintrag nötig und kein Mixed-Content-Problem. Eine Adresse für Oberfläche
+und Schnittstelle.
+
+Diese eine Adresse muss nun von außen erreichbar sein. Drei Wege, vom sichersten
+zum offensten:
+
+**Tailscale oder WireGuard (empfohlen).** Der Bot bleibt in einem privaten Netz,
+kein Port zeigt ins Internet. Von jedem eigenen Gerät erreichbar unter
+`http://<rechnername>:8080`. In der Konfiguration dafür
+`"listen_ip_address": "0.0.0.0"` setzen.
+
+**Cloudflare Tunnel.** Ergibt eine öffentliche HTTPS-Adresse ohne Portfreigabe:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:8080
+```
+
+Davor gehört eine zweite Hürde, etwa Cloudflare Access, sonst steht die
+Schnittstelle offen im Netz.
+
+**Eigener Server mit Reverse-Proxy.** Nginx oder Caddy mit TLS-Zertifikat vor
+dem Bot. Nur sinnvoll, wenn ohnehin ein Server läuft.
+
+### Was dabei zu beachten ist
+
+Die Schnittstelle kann mehr als lesen: Positionen zwangsweise schließen, den Bot
+anhalten, bei Live-Betrieb Orders auslösen. Wer die Adresse und das Passwort hat,
+steuert den Bot.
+
+* Niemals ohne TLS über das offene Internet — die Anmeldung ginge im Klartext.
+* Langes, einmaliges Passwort in `user_data/config.local.json`, nicht das aus
+  irgendeiner Beispielkonfiguration.
+* `jwt_secret_key` zufällig erzeugen und nicht weitergeben.
+* `listen_ip_address` nur dann auf `0.0.0.0` stellen, wenn ein Tunnel oder ein
+  privates Netz davor liegt.
+
+Das Dashboard selbst ruft ausschließlich lesende Endpunkte auf. Die schreibenden
+sind davon unberührt erreichbar — die Absicherung hängt am Bot, nicht an der
+Seite.
+
+## 6. RealizedVolStrategy (FreqAI)
 
 `trading_project/strategies/RealizedVolStrategy.py` übersetzt die Messgrößen der
 Realized-Volatility-Literatur in FreqAI-Merkmale: Realized Variance, Realized
